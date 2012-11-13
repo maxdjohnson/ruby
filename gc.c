@@ -427,86 +427,86 @@ static void initial_expand_heap(rb_objspace_t *objspace);
 
 #define LOCAL_GC_STACK_SIZE 16
 #define GC_STACK_EMPTY -1
-typedef struct deck_struct {
+typedef struct deque_struct {
   VALUE buffer[LOCAL_GC_STACK_SIZE];
   int max_length; //Should be the same size as buffer
   int length;
   int head;
   int tail;
-} deck_t;
+} deque_t;
 
 
-static void deck_init(deck_t* deck, int max_length);
+static void deque_init(deque_t* deque, int max_length);
 
-/* Push val onto the front of deck. Returns 1 if successful, 0 if the stack is 
+/* Push val onto the front of deque. Returns 1 if successful, 0 if the stack is 
    already full.
 */
-static int deck_push(deck_t* deck, VALUE val);
-static VALUE deck_pop(deck_t* deck);
-static VALUE deck_pop_back(deck_t* deck);
-static int deck_empty_p(deck_t* deck);
-static int deck_full_p(deck_t* deck);
+static int deque_push(deque_t* deque, VALUE val);
+static VALUE deque_pop(deque_t* deque);
+static VALUE deque_pop_back(deque_t* deque);
+static int deque_empty_p(deque_t* deque);
+static int deque_full_p(deque_t* deque);
 
-static void deck_init(deck_t* deck, int max_length) {
-  deck->max_length = max_length;
-  deck->length = 0;
-  deck->head = deck->tail = -1;  
+static void deque_init(deque_t* deque, int max_length) {
+  deque->max_length = max_length;
+  deque->length = 0;
+  deque->head = deque->tail = -1;  
 }
 
-static int deck_push(deck_t* deck, VALUE val) {
-  if (deck_full_p(deck))
+static int deque_push(deque_t* deque, VALUE val) {
+  if (deque_full_p(deque))
     return 0;
   
-  if (deck_empty_p(deck)) 
-    deck->head = 0;
+  if (deque_empty_p(deque)) 
+    deque->head = 0;
   
-  deck->tail = (deck->tail + 1) % deck->max_length;
-  deck->buffer[deck->tail] = val;
-  deck->length++;
+  deque->tail = (deque->tail + 1) % deque->max_length;
+  deque->buffer[deque->tail] = val;
+  deque->length++;
   return 1;
 }
 
-static int deck_empty_p(deck_t* deck) {
-  return deck->length == 0;
+static int deque_empty_p(deque_t* deque) {
+  return deque->length == 0;
 }
 
-static int deck_full_p(deck_t* deck) {
-  return deck->length == deck->max_length;
+static int deque_full_p(deque_t* deque) {
+  return deque->length == deque->max_length;
 }
 
 
-static VALUE deck_pop(deck_t* deck) {
+static VALUE deque_pop(deque_t* deque) {
   VALUE rtn;
-  if (deck_empty_p(deck))
+  if (deque_empty_p(deque))
     return GC_STACK_EMPTY;
   
-  rtn = deck->buffer[deck->tail];
-  if (deck->length - 1 == 0) {
+  rtn = deque->buffer[deque->tail];
+  if (deque->length - 1 == 0) {
     //Reset head and tail to beginning
-    deck->head = deck->tail = -1;
+    deque->head = deque->tail = -1;
   }
   else {
-    deck->tail = (deck->tail - 1) % deck->max_length;
+    deque->tail = (deque->tail - 1) % deque->max_length;
   }
-  deck->length--;
+  deque->length--;
   return rtn;
 }
 
-static VALUE deck_pop_back(deck_t* deck) {
+static VALUE deque_pop_back(deque_t* deque) {
   VALUE rtn;
 
-  if (deck_empty_p(deck))
+  if (deque_empty_p(deque))
     return GC_STACK_EMPTY;
   
-  rtn = deck->buffer[deck->head];
-  if (deck->length - 1 == 0) {
-    //Reset head and tail to beginning if this call empties the deck
-    deck->head = deck->tail = -1;
+  rtn = deque->buffer[deque->head];
+  if (deque->length - 1 == 0) {
+    //Reset head and tail to beginning if this call empties the deque
+    deque->head = deque->tail = -1;
   }
   else {
-    deck->head = (deck->head - 1) % deck->max_length;
+    deque->head = (deque->head - 1) % deque->max_length;
   }
-  deck->length--;
+  deque->length--;
   return rtn;
 }
 
