@@ -437,7 +437,7 @@ typedef struct deque_struct {
 
 
 static void deque_init(deque_t* deque, int max_length);
-static void deque_init_with_buf(deque_t* deque, VALUE* buffer, int max_length);
+static void deque_destroy(deque_t* deque);
 /* Push val onto the front of deque. Returns 1 if successful, 0 if the stack is 
    already full.
 */
@@ -450,14 +450,19 @@ static int deque_full_p(deque_t* deque);
 static void deque_init(deque_t* deque, int max_length) {
     //TODO: check error and handle this reasonably
     VALUE* buffer = (VALUE*) malloc(sizeof(VALUE)*max_length);
-    deque_init_with_buf(deque, buffer, max_length);
-}
 
-static void deque_init_with_buf(deque_t* deque, VALUE* buffer, int max_length) {
     deque->buffer = buffer;
     deque->max_length = max_length;
     deque->length = 0;
-    deque->head = deque->tail = -1;  
+    deque->head = deque->tail = -1;
+}
+
+static void deque_destroy(deque_t* deque) {
+    free(deque->buffer);
+}
+
+static void deque_destroy_callback(void* deque) {
+    deque_destroy((deque_t*) deque);
 }
 
 static int deque_push(deque_t* deque, VALUE val) {
@@ -565,6 +570,7 @@ void global_queue_init(global_queue_t* global_queue) {
 }
 
 void global_queue_destroy(global_queue_t* global_queue) {
+    deque_destroy(&(global_queue->deque));
     pthread_mutex_destroy(&global_queue->lock);
     pthread_cond_destroy(&global_queue->wait_condition);
 }
@@ -647,7 +653,7 @@ void gc_mark_parallel(rb_objspace_t* objspace) {
     global_queue = &queuedata;
     global_queue_init(global_queue);
 
-    pthread_key_create(&thread_local_deque_k, NULL);
+    pthread_key_create(&thread_local_deque_k, deque_destroy_callback);
 
     pthread_attr_init(&attr);
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
@@ -2450,7 +2456,6 @@ gc_lazy_sweep(rb_objspace_t *objspace)
             return TRUE;
         }
     }
-
     gc_marks(objspace);
 
     before_gc_sweep(objspace);
