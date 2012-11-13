@@ -2456,7 +2456,8 @@ gc_lazy_sweep(rb_objspace_t *objspace)
             return TRUE;
         }
     }
-    gc_marks(objspace);
+    //    gc_marks(objspace);
+    gc_mark_parallel(objspace);
 
     before_gc_sweep(objspace);
     if (objspace->heap.free_min > (heaps_used * HEAP_OBJ_LIMIT - objspace->heap.live_num)) {
