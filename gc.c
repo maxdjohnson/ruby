@@ -601,15 +601,10 @@ void global_queue_offer_work(global_queue_t* global_queue, deque_t* local_queue)
             (global_queue->count < GLOBAL_QUEUE_SIZE_MIN &&
              localqueuesize > LOCAL_QUEUE_SIZE / 2)) {
         if (pthread_mutex_trylock(&global_queue->lock)) {
-
             //Offer to global
-            for (i = 0; i < MAX_WORK_TO_OFFER; i++) {
-                //TODO: change this to some higher minimum?
-                if (deque_empty_p(local_queue)) 
-                    break;
+            for (i = 0; i < localqueuesize / 2; i++) {
                 deque_push(&(global_queue->deque), deque_pop_back(local_queue));
             }
-
             if (global_queue->waiters) {
                 pthread_cond_broadcast(&global_queue->wait_condition);
             }
