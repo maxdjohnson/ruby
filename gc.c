@@ -538,10 +538,12 @@ mark_queue_t mark_queue = {NULL, NULL, 0};
 #define GLOBAL_QUEUE_SIZE_MIN (GLOBAL_QUEUE_SIZE / 4)
 
 #define LOCAL_QUEUE_SIZE 100 /*TODO*/
-
+#define MAX_WORK_TO_GRAB 4
+#define MAX_WORK_TO_OFFER 4
 typedef struct global_queue_struct {
     unsigned int waiters;
     unsigned int count;
+    deque_t deque;
     pthread_mutex_t lock;
     pthread_cond_t wait_condition;
     unsigned int complete;
@@ -550,6 +552,7 @@ typedef struct global_queue_struct {
 void global_queue_init(global_queue_t* global_queue) {
     global_queue->waiters = 0;
     global_queue->count = 0;
+    deque_init(&(global_queue->deque), GLOBAL_QUEUE_SIZE);
     pthread_mutex_init(&global_queue->lock, NULL);
     pthread_cond_init(&global_queue->wait_condition, NULL);
 }
@@ -560,6 +563,8 @@ void global_queue_destroy(global_queue_t* global_queue) {
 }
 
 void global_queue_pop_work(global_queue_t* global_queue, deque_t* local_queue) {
+    int i;
+
     pthread_mutex_lock(&global_queue->lock);
     while (global_queue->count == 0 && !global_queue->complete) {
         global_queue->waiters++;
@@ -572,18 +577,32 @@ void global_queue_pop_work(global_queue_t* global_queue, deque_t* local_queue) {
         }
         global_queue->waiters--;
     }
-
-    //TODO: Pop work
+       
+    for (i = 0; i < MAX_WORK_TO_GRAB; i++)  {
+        if (deque_empty_p(&global_queue->deque))
+            break;
+        deque_push(local_queue, deque_pop(&(global_queue->deque)));
+    }
+       
     pthread_mutex_unlock(&global_queue->lock);
 }
 
 void global_queue_offer_work(global_queue_t* global_queue, deque_t* local_queue) {
-    int localqueuesize = 10;
+    int i;
+    int localqueuesize = local_queue->length;
     if ((global_queue->waiters && localqueuesize > 2) ||
             (global_queue->count < GLOBAL_QUEUE_SIZE_MIN &&
              localqueuesize > LOCAL_QUEUE_SIZE / 2)) {
         if (pthread_mutex_trylock(&global_queue->lock)) {
-            //TODO: push up to queue
+
+            //Offer to global
+            for (i = 0; i < MAX_WORK_TO_OFFER; i++) {
+                //TODO: change this to some higher minimum?
+                if (deque_empty_p(local_queue)) 
+                    break;
+                deque_push(&(global_queue->deque), deque_pop_back(local_queue));
+            }
+
             if (global_queue->waiters) {
                 pthread_cond_broadcast(&global_queue->wait_condition);
             }
@@ -616,24 +635,27 @@ void* mark_run_loop(void* arg) {
 }
 
 void gc_mark_parallel(rb_objspace_t* objspace) {
-    active_objspace = objspace;
     global_queue_t queuedata;
+    pthread_attr_t attr;
+    pthread_t threads[NTHREADS];
+    long t;
+    void* status;
+
+    active_objspace = objspace;
     global_queue = &queuedata;
     global_queue_init(global_queue);
 
     pthread_key_create(&thread_local_deque_k, NULL);
 
-    pthread_attr_t attr;
-    pthread_t threads[NTHREADS];
     pthread_attr_init(&attr);
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
-    long t;
+
     for (t = 0; t < NTHREADS; t++) {
         pthread_create(&threads[t], &attr, mark_run_loop, (void*)t);
         //TODO: handle error codes
     }
     pthread_attr_destroy(&attr);
-    void* status;
+
     for (t = 0; t < NTHREADS; t++) {
         pthread_join(threads[t], &status);
         //TODO: handle error codes
