@@ -428,16 +428,16 @@ static void initial_expand_heap(rb_objspace_t *objspace);
 #define LOCAL_GC_STACK_SIZE 16
 #define GC_STACK_EMPTY -1
 typedef struct deque_struct {
-  VALUE buffer[LOCAL_GC_STACK_SIZE];
-  int max_length; //Should be the same size as buffer
-  int length;
-  int head;
-  int tail;
+    VALUE* buffer;
+    int max_length; //Should be the same size as buffer
+    int length;
+    int head;
+    int tail;
 } deque_t;
 
 
 static void deque_init(deque_t* deque, int max_length);
-
+static void deque_init_with_buf(deque_t* deque, VALUE* buffer, int max_length);
 /* Push val onto the front of deque. Returns 1 if successful, 0 if the stack is 
    already full.
 */
@@ -448,9 +448,16 @@ static int deque_empty_p(deque_t* deque);
 static int deque_full_p(deque_t* deque);
 
 static void deque_init(deque_t* deque, int max_length) {
-  deque->max_length = max_length;
-  deque->length = 0;
-  deque->head = deque->tail = -1;  
+    //TODO: check error and handle this reasonably
+    VALUE* buffer = (VALUE*) malloc(sizeof(VALUE)*max_length);
+    deque_init_with_buf(deque, buffer, max_length);
+}
+
+static void deque_init_with_buf(deque_t* deque, VALUE* buffer, int max_length) {
+    deque->buffer = buffer;
+    deque->max_length = max_length;
+    deque->length = 0;
+    deque->head = deque->tail = -1;  
 }
 
 static int deque_push(deque_t* deque, VALUE val) {
