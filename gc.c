@@ -542,7 +542,6 @@ mark_queue_t mark_queue = {NULL, NULL, 0};
 typedef struct global_queue_struct {
     unsigned int waiters;
     unsigned int count;
-    // elements?
     pthread_mutex_t lock;
     pthread_cond_t wait_condition;
     unsigned int complete;
@@ -560,7 +559,7 @@ void global_queue_destroy(global_queue_t* global_queue) {
     pthread_cond_destroy(&global_queue->wait_condition);
 }
 
-void global_queue_pop_work(global_queue_t* global_queue, deck_t* local_queue) {
+void global_queue_pop_work(global_queue_t* global_queue, deque_t* local_queue) {
     pthread_mutex_lock(&global_queue->lock);
     while (global_queue->count == 0 && !global_queue->complete) {
         global_queue->waiters++;
@@ -578,7 +577,7 @@ void global_queue_pop_work(global_queue_t* global_queue, deck_t* local_queue) {
     pthread_mutex_unlock(&global_queue->lock);
 }
 
-void global_queue_offer_work(global_queue_t* global_queue, deck_t* local_queue) {
+void global_queue_offer_work(global_queue_t* global_queue, deque_t* local_queue) {
     int localqueuesize = 10;
     if ((global_queue->waiters && localqueuesize > 2) ||
             (global_queue->count < GLOBAL_QUEUE_SIZE_MIN &&
@@ -598,21 +597,21 @@ static void gc_marks(rb_objspace_t *objspace);
 
 rb_objspace_t* active_objspace;
 global_queue_t* global_queue;
-pthread_key_t thread_local_deck_k;
+pthread_key_t thread_local_deque_k;
 void* mark_run_loop(void* arg) {
     long thread_id = (long) arg;
-    deck_t deck;
-    deck_init(&deck, LOCAL_GC_STACK_SIZE);
-    pthread_setspecific(thread_local_deck_k, &deck);
+    deque_t deque;
+    deque_init(&deque, LOCAL_GC_STACK_SIZE);
+    pthread_setspecific(thread_local_deque_k, &deque);
     if (thread_id == 0) {
         gc_marks(active_objspace);
     }
     while (!global_queue->complete) {
-        global_queue_offer_work(global_queue, &deck);
-        if (deck_empty_p(&deck)) {
-            global_queue_pop_work(global_queue, &deck);
+        global_queue_offer_work(global_queue, &deque);
+        if (deque_empty_p(&deque)) {
+            global_queue_pop_work(global_queue, &deque);
         }
-        gc_mark(active_objspace, deck_pop(&deck), 1);
+        gc_mark(active_objspace, deque_pop(&deque), 1);
     }
 }
 
@@ -622,7 +621,7 @@ void gc_mark_parallel(rb_objspace_t* objspace) {
     global_queue = &queuedata;
     global_queue_init(global_queue);
 
-    pthread_key_create(&thread_local_deck_k, NULL);
+    pthread_key_create(&thread_local_deque_k, NULL);
 
     pthread_attr_t attr;
     pthread_t threads[NTHREADS];
@@ -1877,8 +1876,8 @@ gc_mark(rb_objspace_t *objspace, VALUE ptr, int lev)
 
 void
 gc_mark_defer(rb_objspace_t *objspace, VALUE ptr, int lev) {
-    deck_t* deck = (deck_t*) pthread_getspecific(thread_local_deck_k);
-    deck_push(deck, ptr);
+    deque_t* deque = (deque_t*) pthread_getspecific(thread_local_deque_k);
+    deque_push(deque, ptr);
     //TODO: Handle push failing due to being full
 }
 
