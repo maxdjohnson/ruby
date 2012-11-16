@@ -1906,8 +1906,12 @@ gc_mark(rb_objspace_t *objspace, VALUE ptr, int lev)
 void
 gc_mark_defer(rb_objspace_t *objspace, VALUE ptr, int lev) {
     deque_t* deque = (deque_t*) pthread_getspecific(thread_local_deque_k);
-    deque_push(deque, ptr);
-    //TODO: Handle push failing due to being full
+    if (deque_push(deque, ptr) == 0) {
+        global_queue_offer_work(global_queue, deque);
+        if (deque_push(deque, ptr) == 0) {
+            gc_mark(objspace, ptr, lev);
+        }
+    }
 }
 
 void
