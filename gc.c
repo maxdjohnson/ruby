@@ -438,7 +438,7 @@ typedef struct deque_struct {
 
 static void deque_init(deque_t* deque, int max_length);
 static void deque_destroy(deque_t* deque);
-/* Push val onto the front of deque. Returns 1 if successful, 0 if the stack is 
+/* Push val onto the front of deque. Returns 1 if successful, 0 if the stack is
    already full.
 */
 static int deque_push(deque_t* deque, VALUE val);
@@ -468,10 +468,10 @@ static void deque_destroy_callback(void* deque) {
 static int deque_push(deque_t* deque, VALUE val) {
   if (deque_full_p(deque))
     return 0;
-  
-  if (deque_empty_p(deque)) 
+
+  if (deque_empty_p(deque))
     deque->head = 0;
-  
+
   deque->tail = (deque->tail + 1) % deque->max_length;
   deque->buffer[deque->tail] = val;
   deque->length++;
@@ -491,7 +491,7 @@ static VALUE deque_pop(deque_t* deque) {
   VALUE rtn;
   if (deque_empty_p(deque))
     return GC_STACK_EMPTY;
-  
+
   rtn = deque->buffer[deque->tail];
   if (deque->length - 1 == 0) {
     //Reset head and tail to beginning
@@ -509,7 +509,7 @@ static VALUE deque_pop_back(deque_t* deque) {
 
   if (deque_empty_p(deque))
     return GC_STACK_EMPTY;
-  
+
   rtn = deque->buffer[deque->head];
   if (deque->length - 1 == 0) {
     //Reset head and tail to beginning if this call empties the deque
@@ -590,13 +590,13 @@ void global_queue_pop_work(global_queue_t* global_queue, deque_t* local_queue) {
         }
         global_queue->waiters--;
     }
-       
+
     for (i = 0; i < MAX_WORK_TO_GRAB; i++)  {
         if (deque_empty_p(&global_queue->deque))
             break;
         deque_push(local_queue, deque_pop(&(global_queue->deque)));
     }
-       
+
     pthread_mutex_unlock(&global_queue->lock);
 }
 
