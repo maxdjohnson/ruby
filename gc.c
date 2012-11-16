@@ -2160,11 +2160,11 @@ extern void gc_mark_parallel(void* objspace);
 
 static void gc_marks(rb_objspace_t *objspace);
 
-static void gc_start_mark(void* objspace) {
+void gc_start_mark(void* objspace) {
     gc_marks((rb_objspace_t*) objspace);
 }
 
-static void gc_do_mark(void* objspace, VALUE ptr) {
+void gc_do_mark(void* objspace, VALUE ptr) {
     gc_mark((rb_objspace_t*) objspace, ptr, 1);
 }
 

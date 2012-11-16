@@ -52,6 +52,7 @@ COMMONOBJS    = array.$(OBJEXT) \
 		load.$(OBJEXT) \
 		proc.$(OBJEXT) \
 		file.$(OBJEXT) \
+		gc_threading.$(OBJEXT) \
 		gc.$(OBJEXT) \
 		hash.$(OBJEXT) \
 		inits.$(OBJEXT) \
@@ -627,6 +628,7 @@ load.$(OBJEXT): {$(VPATH)}load.c {$(VPATH)}eval_intern.h \
 file.$(OBJEXT): {$(VPATH)}file.c $(RUBY_H_INCLUDES) {$(VPATH)}io.h \
   $(ENCODING_H_INCLUDES) {$(VPATH)}util.h {$(VPATH)}dln.h \
   {$(VPATH)}internal.h
+gc_threading.$(OBJEXT): {$(VPATH)}gc_threading.c $(RUBY_H_INCLUDES)
 gc.$(OBJEXT): {$(VPATH)}gc.c $(RUBY_H_INCLUDES) {$(VPATH)}re.h \
   {$(VPATH)}regex.h $(ENCODING_H_INCLUDES) $(VM_CORE_H_INCLUDES) \
   {$(VPATH)}gc.h {$(VPATH)}io.h {$(VPATH)}eval_intern.h {$(VPATH)}util.h \

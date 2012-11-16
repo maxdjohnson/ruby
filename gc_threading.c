@@ -25,7 +25,7 @@ typedef struct deque_struct {
     int tail;
 } deque_t;
 
-void deque_init(deque_t* deque, int max_length) {
+static void deque_init(deque_t* deque, int max_length) {
     //TODO: check error and handle this reasonably
     VALUE* buffer = (VALUE*) malloc(sizeof(VALUE)*max_length);
 
@@ -35,23 +35,23 @@ void deque_init(deque_t* deque, int max_length) {
     deque->head = deque->tail = -1;
 }
 
-void deque_destroy(deque_t* deque) {
+static void deque_destroy(deque_t* deque) {
     free(deque->buffer);
 }
 
-void deque_destroy_callback(void* deque) {
+static void deque_destroy_callback(void* deque) {
     deque_destroy((deque_t*) deque);
 }
 
-int deque_empty_p(deque_t* deque) {
+static int deque_empty_p(deque_t* deque) {
   return deque->length == 0;
 }
 
-int deque_full_p(deque_t* deque) {
+static int deque_full_p(deque_t* deque) {
   return deque->length == deque->max_length;
 }
 
-int deque_push(deque_t* deque, VALUE val) {
+static int deque_push(deque_t* deque, VALUE val) {
   if (deque_full_p(deque))
     return 0;
 
@@ -64,7 +64,7 @@ int deque_push(deque_t* deque, VALUE val) {
   return 1;
 }
 
-VALUE deque_pop(deque_t* deque) {
+static VALUE deque_pop(deque_t* deque) {
   VALUE rtn;
   if (deque_empty_p(deque))
     return DEQUE_EMPTY;
@@ -81,7 +81,7 @@ VALUE deque_pop(deque_t* deque) {
   return rtn;
 }
 
-VALUE deque_pop_back(deque_t* deque) {
+static VALUE deque_pop_back(deque_t* deque) {
   VALUE rtn;
 
   if (deque_empty_p(deque))
@@ -112,7 +112,7 @@ typedef struct global_queue_struct {
     unsigned int complete;
 } global_queue_t;
 
-void global_queue_init(global_queue_t* global_queue) {
+static void global_queue_init(global_queue_t* global_queue) {
     global_queue->waiters = 0;
     global_queue->count = 0;
     deque_init(&(global_queue->deque), GLOBAL_QUEUE_SIZE);
@@ -120,13 +120,13 @@ void global_queue_init(global_queue_t* global_queue) {
     pthread_cond_init(&global_queue->wait_condition, NULL);
 }
 
-void global_queue_destroy(global_queue_t* global_queue) {
+static void global_queue_destroy(global_queue_t* global_queue) {
     deque_destroy(&(global_queue->deque));
     pthread_mutex_destroy(&global_queue->lock);
     pthread_cond_destroy(&global_queue->wait_condition);
 }
 
-void global_queue_pop_work(global_queue_t* global_queue, deque_t* local_queue) {
+static void global_queue_pop_work(global_queue_t* global_queue, deque_t* local_queue) {
     int i;
 
     pthread_mutex_lock(&global_queue->lock);
@@ -151,7 +151,7 @@ void global_queue_pop_work(global_queue_t* global_queue, deque_t* local_queue) {
     pthread_mutex_unlock(&global_queue->lock);
 }
 
-void global_queue_offer_work(global_queue_t* global_queue, deque_t* local_queue) {
+static void global_queue_offer_work(global_queue_t* global_queue, deque_t* local_queue) {
     int i;
     int localqueuesize = local_queue->length;
     if ((global_queue->waiters && localqueuesize > 2) ||
@@ -177,24 +177,24 @@ void global_queue_offer_work(global_queue_t* global_queue, deque_t* local_queue)
 void* active_objspace;
 global_queue_t* global_queue;
 pthread_key_t thread_local_deque_k;
-void* mark_run_loop(void* arg) {
+static void* mark_run_loop(void* arg) {
     long thread_id = (long) arg;
     deque_t deque;
     deque_init(&deque, LOCAL_QUEUE_SIZE);
     pthread_setspecific(thread_local_deque_k, &deque);
     if (thread_id == 0) {
-        gc_marks(active_objspace);
+        gc_start_mark(active_objspace);
     }
     while (!global_queue->complete) {
         global_queue_offer_work(global_queue, &deque);
         if (deque_empty_p(&deque)) {
             global_queue_pop_work(global_queue, &deque);
         }
-        gc_mark(active_objspace, deque_pop(&deque), 1);
+        gc_do_mark(active_objspace, deque_pop(&deque));
     }
 }
 
-static void gc_mark_parallel(void* objspace) {
+void gc_mark_parallel(void* objspace) {
     global_queue_t queuedata;
     pthread_attr_t attr;
     pthread_t threads[NTHREADS];
@@ -223,13 +223,12 @@ static void gc_mark_parallel(void* objspace) {
     global_queue_destroy(global_queue);
 }
 
-static void
-gc_mark_defer(void *objspace, VALUE ptr, int lev) {
+void gc_mark_defer(void *objspace, VALUE ptr, int lev) {
     deque_t* deque = (deque_t*) pthread_getspecific(thread_local_deque_k);
     if (deque_push(deque, ptr) == 0) {
         global_queue_offer_work(global_queue, deque);
         if (deque_push(deque, ptr) == 0) {
-            gc_mark(objspace, ptr, lev);
+            gc_do_mark(objspace, ptr);
         }
     }
 }
