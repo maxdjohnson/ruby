@@ -425,7 +425,6 @@ static void initial_expand_heap(rb_objspace_t *objspace);
 
 /* CS194: Marking stack struct and methods */
 
-#define LOCAL_GC_STACK_SIZE 16
 #define GC_STACK_EMPTY -1
 typedef struct deque_struct {
     VALUE* buffer;
@@ -628,7 +627,7 @@ pthread_key_t thread_local_deque_k;
 void* mark_run_loop(void* arg) {
     long thread_id = (long) arg;
     deque_t deque;
-    deque_init(&deque, LOCAL_GC_STACK_SIZE);
+    deque_init(&deque, LOCAL_QUEUE_SIZE);
     pthread_setspecific(thread_local_deque_k, &deque);
     if (thread_id == 0) {
         gc_marks(active_objspace);
