@@ -1,10 +1,11 @@
 #include "ruby/ruby.h"
+#include <stdio.h>
 #include <pthread.h>
 
 #define NTHREADS 4
-#define GLOBAL_QUEUE_SIZE 100 /*TODO*/
+#define GLOBAL_QUEUE_SIZE 500 /*TODO*/
 #define GLOBAL_QUEUE_SIZE_MIN (GLOBAL_QUEUE_SIZE / 4)
-#define LOCAL_QUEUE_SIZE 100 /*TODO*/
+#define LOCAL_QUEUE_SIZE 200 /*TODO*/
 #define MAX_WORK_TO_GRAB 4
 #define MAX_WORK_TO_OFFER 4
 #define DEQUE_FULL 0
@@ -118,6 +119,7 @@ static void global_queue_init(global_queue_t* global_queue) {
     deque_init(&(global_queue->deque), GLOBAL_QUEUE_SIZE);
     pthread_mutex_init(&global_queue->lock, NULL);
     pthread_cond_init(&global_queue->wait_condition, NULL);
+    global_queue->complete = 0;
 }
 
 static void global_queue_destroy(global_queue_t* global_queue) {
@@ -126,18 +128,24 @@ static void global_queue_destroy(global_queue_t* global_queue) {
     pthread_cond_destroy(&global_queue->wait_condition);
 }
 
-static void global_queue_pop_work(global_queue_t* global_queue, deque_t* local_queue) {
+static void global_queue_pop_work(unsigned long thread_id, global_queue_t* global_queue, deque_t* local_queue) {
     int i;
 
+    printf("Thread %lu aquiring global queue lock\n", thread_id);
     pthread_mutex_lock(&global_queue->lock);
+    printf("Thread %lu aquired global queue lock\n", thread_id);
     while (global_queue->count == 0 && !global_queue->complete) {
         global_queue->waiters++;
+        printf("Thread %lu checking wait condition. Waiters: %d NTHREADS: %d\n", thread_id, global_queue->waiters, NTHREADS);
         if (global_queue->waiters == NTHREADS) {
+            printf("Marking complete + waking threads\n");
             global_queue->complete = 1;
             pthread_cond_broadcast(&global_queue->wait_condition);
         } else {
             // Release the lock and go to sleep until someone signals
+            printf("Thread %lu waiting. Waiters: %d\n", thread_id, global_queue->waiters);
             pthread_cond_wait(&global_queue->wait_condition, &global_queue->lock);
+            printf("Thread %lu awoken\n", thread_id);
         }
         global_queue->waiters--;
     }
@@ -179,19 +187,28 @@ global_queue_t* global_queue;
 pthread_key_t thread_local_deque_k;
 static void* mark_run_loop(void* arg) {
     long thread_id = (long) arg;
+    printf("Thread %lu started\n", thread_id);
     deque_t deque;
     deque_init(&deque, LOCAL_QUEUE_SIZE);
     pthread_setspecific(thread_local_deque_k, &deque);
     if (thread_id == 0) {
+        printf("Thread 0 running start_mark\n");
         gc_start_mark(active_objspace);
     }
-    while (!global_queue->complete) {
+    while (1) {
         global_queue_offer_work(global_queue, &deque);
         if (deque_empty_p(&deque)) {
-            global_queue_pop_work(global_queue, &deque);
+            printf("Thread %lu taking work from the master thread\n", thread_id);
+            global_queue_pop_work(thread_id, global_queue, &deque);
         }
-        gc_do_mark(active_objspace, deque_pop(&deque));
+        if (global_queue->complete) {
+            break;
+        }
+        VALUE v = deque_pop(&deque);
+        printf("Thread %lu marking %lu\n", thread_id, v);
+        gc_do_mark(active_objspace, v);
     }
+    return NULL;
 }
 
 void gc_mark_parallel(void* objspace) {
