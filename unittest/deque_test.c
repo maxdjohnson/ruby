@@ -45,9 +45,9 @@ void destroy_test_case(TestCase* test) {
     deque_destroy(test->deque);
 }
 
+
 void do_deque_push_test_call(TestCase* test_case) {
     int i, success;
-
     for (i = 0; i < test_case->test_length; i++) {
         success = deque_push(test_case->deque, test_case->test_vals[i]);
         assert(success);
@@ -102,7 +102,7 @@ void dump_deque(deque_t* dq) {
     for(i = 0; i < dq->max_length - 1; i++) {
         printf("%lu, ", dq->buffer[i]);
     }
-    printf("%ul", dq->buffer[i]);
+    printf("%lu", dq->buffer[i]);
     printf("]\n");
 }
 
@@ -119,6 +119,16 @@ int test_deque_push_with_wrap() {
     test->deque->head = 2;
     test->deque->tail = 2;
     return do_deque_push_test(test);
+}
+
+int test_pos_mod() {
+    int errors = 0;
+    printf("test_pos_mod:\n");
+    errors += assert_equals(POS_MOD(3, 4), 3, NULL);
+    errors += assert_equals(POS_MOD(5, 4), 1, NULL);
+    errors += assert_equals(POS_MOD(-1, 4), 3, NULL);
+    errors += assert_equals(POS_MOD(-5, 4), 3, NULL);
+    return errors != 0;
 }
 
 int test_deque_push_maintains_tail_properly() {
@@ -242,13 +252,8 @@ int main (int ARGC, char** ARGV) {
 
     failures += test_deque_pop_returns_right_values();
     failures += test_deque_pop_maintains_tail_with_wrap();
+    failures += test_pos_mod();
     printf("Got %d failures\n", failures);
-    /* init_test_case(&tests[1], */
-    /*                {1}, */
-    /*                {1,2,3}, */
-    /*                3, */
-    /*                5); */
-    /* do_test(&tests[1]); */
 
     return failures == 0;
 }

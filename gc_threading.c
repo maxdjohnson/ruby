@@ -1,8 +1,10 @@
 #include "ruby/ruby.h"
+#include <assert.h>
+#include "gc.h"
 #include <stdio.h>
 #include <pthread.h>
 
-#define NTHREADS 4
+#define NTHREADS 1
 #define GLOBAL_QUEUE_SIZE 500 /*TODO*/
 #define GLOBAL_QUEUE_SIZE_MIN (GLOBAL_QUEUE_SIZE / 4)
 #define LOCAL_QUEUE_SIZE 200 /*TODO*/
@@ -15,7 +17,7 @@ extern void gc_do_mark(void* objspace, VALUE ptr);
 extern void gc_start_mark(void* objspace);
 
 /**
- * Dequeue
+ * Deque
  */
 
 typedef struct deque_struct {
@@ -33,7 +35,7 @@ static void deque_init(deque_t* deque, int max_length) {
     deque->buffer = buffer;
     deque->max_length = max_length;
     deque->length = 0;
-    deque->head = deque->tail = -1;
+    deque->head = deque->tail = 0;
 }
 
 static void deque_destroy(deque_t* deque) {
@@ -52,14 +54,17 @@ static int deque_full_p(deque_t* deque) {
   return deque->length == deque->max_length;
 }
 
+/* A mod function that always gives positive results */
+#define POS_MOD(a, b) \
+    (a >= 0 ? (a) % (b) : (((a) % (b)) + b) % b)
+
 static int deque_push(deque_t* deque, VALUE val) {
   if (deque_full_p(deque))
     return 0;
 
-  if (deque_empty_p(deque))
-    deque->head = 0;
+  if (! deque_empty_p(deque))
+      deque->tail = POS_MOD(deque->tail + 1, deque->max_length);
 
-  deque->tail = (deque->tail + 1) % deque->max_length;
   deque->buffer[deque->tail] = val;
   deque->length++;
   return 1;
@@ -69,33 +74,26 @@ static VALUE deque_pop(deque_t* deque) {
   VALUE rtn;
   if (deque_empty_p(deque))
     return DEQUE_EMPTY;
+  assert(deque->tail >= 0);
+  rtn = deque->buffer[deque->tail];  
 
-  rtn = deque->buffer[deque->tail];
-  if (deque->length - 1 == 0) {
-    //Reset head and tail to beginning
-    deque->head = deque->tail = -1;
-  }
-  else {
-    deque->tail = (deque->tail - 1) % deque->max_length;
-  }
+  deque->tail = POS_MOD(deque->tail - 1, deque->max_length);
+
   deque->length--;
   return rtn;
 }
 
 static VALUE deque_pop_back(deque_t* deque) {
   VALUE rtn;
-
+  int index;
   if (deque_empty_p(deque))
     return DEQUE_EMPTY;
+  index = deque->head;
+  assert(index >= 0);
+  rtn = deque->buffer[index];
 
-  rtn = deque->buffer[deque->head];
-  if (deque->length - 1 == 0) {
-    //Reset head and tail to beginning if this call empties the deque
-    deque->head = deque->tail = -1;
-  }
-  else {
-    deque->head = (deque->head - 1) % deque->max_length;
-  }
+  deque->head = POS_MOD(deque->head - 1, deque->max_length);
+
   deque->length--;
   return rtn;
 }
@@ -187,8 +185,10 @@ global_queue_t* global_queue;
 pthread_key_t thread_local_deque_k;
 static void* mark_run_loop(void* arg) {
     long thread_id = (long) arg;
-    printf("Thread %lu started\n", thread_id);
     deque_t deque;
+    VALUE v;
+    printf("Thread %lu started\n", thread_id);
+
     deque_init(&deque, LOCAL_QUEUE_SIZE);
     pthread_setspecific(thread_local_deque_k, &deque);
     if (thread_id == 0) {
@@ -204,7 +204,7 @@ static void* mark_run_loop(void* arg) {
         if (global_queue->complete) {
             break;
         }
-        VALUE v = deque_pop(&deque);
+        v = deque_pop(&deque);
         //        printf("Thread %lu marking %lu\n", thread_id, v);
         gc_do_mark(active_objspace, v);
     }
@@ -242,6 +242,7 @@ void gc_mark_parallel(void* objspace) {
         pthread_join(threads[t], &status);
         //TODO: handle error codes
     }
+
     global_queue_destroy(global_queue);
 }
 
