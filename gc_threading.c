@@ -13,6 +13,19 @@
 #define DEQUE_FULL 0
 #define DEQUE_EMPTY -1
 
+#define THREADING_DEBUG_LVL 0
+
+#define debug_print(...)                   \
+    if (THREADING_DEBUG_LVL)                    \
+        printf(__VA_ARGS__);
+
+/* A mod function that always gives positive results */
+#define POS_MOD(a, b) \
+    (((a) % (b) + b) % b)
+
+#define MIN(a,b) \
+    ((a) < (b) ? (a) : (b))
+
 
 extern void gc_do_mark(void* objspace, VALUE ptr);
 extern void gc_start_mark(void* objspace);
@@ -55,9 +68,6 @@ static int deque_full_p(deque_t* deque) {
   return deque->length == deque->max_length;
 }
 
-/* A mod function that always gives positive results */
-#define POS_MOD(a, b) \
-    (a >= 0 ? (a) % (b) : (((a) % (b)) + b) % b)
 
 static int deque_push(deque_t* deque, VALUE val) {
   if (deque_full_p(deque))
@@ -105,16 +115,16 @@ static VALUE deque_pop_back(deque_t* deque) {
 
 typedef struct global_queue_struct {
     unsigned int waiters;
-    unsigned int count;
     deque_t deque;
     pthread_mutex_t lock;
     pthread_cond_t wait_condition;
     unsigned int complete;
 } global_queue_t;
 
+#define global_queue_count global_queue->deque.length
+
 static void global_queue_init(global_queue_t* global_queue) {
     global_queue->waiters = 0;
-    global_queue->count = 0;
     deque_init(&(global_queue->deque), GLOBAL_QUEUE_SIZE);
     pthread_mutex_init(&global_queue->lock, NULL);
     pthread_cond_init(&global_queue->wait_condition, NULL);
@@ -128,12 +138,12 @@ static void global_queue_destroy(global_queue_t* global_queue) {
 }
 
 static void global_queue_pop_work(unsigned long thread_id, global_queue_t* global_queue, deque_t* local_queue) {
-    int i;
+    int i, work_to_grab;
 
     printf("Thread %lu aquiring global queue lock\n", thread_id);
     pthread_mutex_lock(&global_queue->lock);
     printf("Thread %lu aquired global queue lock\n", thread_id);
-    while (global_queue->count == 0 && !global_queue->complete) {
+    while (global_queue_count == 0 && !global_queue->complete) {
         global_queue->waiters++;
         printf("Thread %lu checking wait condition. Waiters: %d NTHREADS: %d\n", thread_id, global_queue->waiters, NTHREADS);
         if (global_queue->waiters == NTHREADS) {
@@ -148,12 +158,11 @@ static void global_queue_pop_work(unsigned long thread_id, global_queue_t* globa
         }
         global_queue->waiters--;
     }
-
-    for (i = 0; i < MAX_WORK_TO_GRAB; i++)  {
-        if (deque_empty_p(&global_queue->deque))
-            break;
+    work_to_grab = MIN(global_queue_count, MAX_WORK_TO_GRAB);
+    for (i = 0; i < work_to_grab; i++)  {
         deque_push(local_queue, deque_pop(&(global_queue->deque)));
     }
+    printf("Thread %lu took %d items from global\n", thread_id, work_to_grab);
 
     pthread_mutex_unlock(&global_queue->lock);
 }
@@ -161,25 +170,29 @@ static void global_queue_pop_work(unsigned long thread_id, global_queue_t* globa
 static void global_queue_offer_work(global_queue_t* global_queue, deque_t* local_queue) {
     int i;
     int localqueuesize = local_queue->length;
-    int items_to_offer = localqueuesize / 2;
+    int items_to_offer, free_slots; 
 
     if ((global_queue->waiters && localqueuesize > 2) ||
-            (global_queue->count < GLOBAL_QUEUE_SIZE_MIN &&
+            (global_queue_count < GLOBAL_QUEUE_SIZE_MIN &&
              localqueuesize > LOCAL_QUEUE_SIZE / 2)) {
-        if (pthread_mutex_trylock(&global_queue->lock)) {
-            //Offer to global
-            printf("Thread %lu offering %d items to global\n", 
-                   *((long*)pthread_getspecific(thread_id_k)),
-                   items_to_offer);
 
-            for (i = 0; i < items_to_offer; i++) {
-                deque_push(&(global_queue->deque), deque_pop_back(local_queue));
-            }
-            if (global_queue->waiters) {
-                pthread_cond_broadcast(&global_queue->wait_condition);
-            }
-            pthread_mutex_unlock(&global_queue->lock);
+        pthread_mutex_lock(&global_queue->lock);
+
+        free_slots = GLOBAL_QUEUE_SIZE - global_queue_count;
+        items_to_offer = MIN(localqueuesize / 2, free_slots);
+        //Offer to global
+        printf("Thread %lu offering %d items to global\n", 
+               *((long*)pthread_getspecific(thread_id_k)),
+               items_to_offer);
+
+        for (i = 0; i < items_to_offer; i++) {            
+            assert(deque_push(&(global_queue->deque), deque_pop_back(local_queue)));
         }
+        if (global_queue->waiters) {
+            pthread_cond_broadcast(&global_queue->wait_condition);
+        }
+        pthread_mutex_unlock(&global_queue->lock);
+        
     }
 }
 
