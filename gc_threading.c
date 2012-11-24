@@ -13,9 +13,10 @@
 #define DEQUE_FULL 0
 #define DEQUE_EMPTY -1
 
+
 extern void gc_do_mark(void* objspace, VALUE ptr);
 extern void gc_start_mark(void* objspace);
-
+pthread_key_t thread_id_k;
 /**
  * Deque
  */
@@ -160,12 +161,18 @@ static void global_queue_pop_work(unsigned long thread_id, global_queue_t* globa
 static void global_queue_offer_work(global_queue_t* global_queue, deque_t* local_queue) {
     int i;
     int localqueuesize = local_queue->length;
+    int items_to_offer = localqueuesize / 2;
+
     if ((global_queue->waiters && localqueuesize > 2) ||
             (global_queue->count < GLOBAL_QUEUE_SIZE_MIN &&
              localqueuesize > LOCAL_QUEUE_SIZE / 2)) {
         if (pthread_mutex_trylock(&global_queue->lock)) {
             //Offer to global
-            for (i = 0; i < localqueuesize / 2; i++) {
+            printf("Thread %lu offering %d items to global\n", 
+                   *((long*)pthread_getspecific(thread_id_k)),
+                   items_to_offer);
+
+            for (i = 0; i < items_to_offer; i++) {
                 deque_push(&(global_queue->deque), deque_pop_back(local_queue));
             }
             if (global_queue->waiters) {
@@ -183,6 +190,7 @@ static void global_queue_offer_work(global_queue_t* global_queue, deque_t* local
 void* active_objspace;
 global_queue_t* global_queue;
 pthread_key_t thread_local_deque_k;
+
 static void* mark_run_loop(void* arg) {
     long thread_id = (long) arg;
     deque_t deque;
@@ -191,14 +199,16 @@ static void* mark_run_loop(void* arg) {
 
     deque_init(&deque, LOCAL_QUEUE_SIZE);
     pthread_setspecific(thread_local_deque_k, &deque);
+    pthread_setspecific(thread_id_k, &thread_id);
     if (thread_id == 0) {
         printf("Thread 0 running start_mark\n");
         gc_start_mark(active_objspace);
+        printf("Thread 0 finished start_mark\n");
     }
     while (1) {
         global_queue_offer_work(global_queue, &deque);
         if (deque_empty_p(&deque)) {
-            printf("Thread %lu taking work from the master thread\n", thread_id);
+            printf("Thread %lu taking work from the global queue\n", thread_id);
             global_queue_pop_work(thread_id, global_queue, &deque);
         }
         if (global_queue->complete) {
@@ -223,6 +233,7 @@ void gc_mark_parallel(void* objspace) {
     global_queue_init(global_queue);
 
     pthread_key_create(&thread_local_deque_k, deque_destroy_callback);
+    pthread_key_create(&thread_id_k, NULL);
 
     pthread_attr_init(&attr);
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
