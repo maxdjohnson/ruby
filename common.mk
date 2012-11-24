@@ -38,7 +38,7 @@ DLDOBJS	      = $(DMYEXT)
 MINIOBJS      = $(ARCHMINIOBJS) dmyencoding.$(OBJEXT) dmyversion.$(OBJEXT) miniprelude.$(OBJEXT)
 ENC_MK        = enc.mk
 
-COMMONOBJS    = array.$(OBJEXT) \
+NORMAL_OBJS   = array.$(OBJEXT) \
 		bignum.$(OBJEXT) \
 		class.$(OBJEXT) \
 		compar.$(OBJEXT) \
@@ -97,6 +97,13 @@ COMMONOBJS    = array.$(OBJEXT) \
 		$(BUILTIN_ENCOBJS) \
 		$(BUILTIN_TRANSOBJS) \
 		$(MISSING)
+
+#This is a hacky way of doing this
+COMMONOBJS    = $(NORMAL_OBJS) \
+		gc_marker.$(OBJEXT)
+
+GC_TEST_OBJS  = $(NORMAL_OBJS) \
+		gc_test_marker.$(OBJEXT)
 
 EXPORTOBJS    = dln.$(OBJEXT) \
 		encoding.$(OBJEXT) \
@@ -188,6 +195,7 @@ loadpath: $(PREP) PHONY
 $(PREP): $(MKFILES)
 
 miniruby$(EXEEXT): config.status $(NORMALMAINOBJ) $(MINIOBJS) $(COMMONOBJS) $(DMYEXT) $(ARCHFILE)
+
 
 GORUBY = go$(RUBY_INSTALL_NAME)
 golf: $(LIBRUBY) $(GOLFOBJS) PHONY
@@ -629,6 +637,7 @@ file.$(OBJEXT): {$(VPATH)}file.c $(RUBY_H_INCLUDES) {$(VPATH)}io.h \
   $(ENCODING_H_INCLUDES) {$(VPATH)}util.h {$(VPATH)}dln.h \
   {$(VPATH)}internal.h
 gc_threading.$(OBJEXT): {$(VPATH)}gc_threading.c $(RUBY_H_INCLUDES)
+gc_marker.$(OBJEXT): {$(VPATH)}gc_marker.c $(RUBY_H_INCLUDES)
 gc.$(OBJEXT): {$(VPATH)}gc.c $(RUBY_H_INCLUDES) {$(VPATH)}re.h \
   {$(VPATH)}regex.h $(ENCODING_H_INCLUDES) $(VM_CORE_H_INCLUDES) \
   {$(VPATH)}gc.h {$(VPATH)}io.h {$(VPATH)}eval_intern.h {$(VPATH)}util.h \

@@ -164,6 +164,13 @@ miniruby$(EXEEXT):
 		$(ECHO) linking $@
 		$(Q) $(PURIFY) $(CC) $(LDFLAGS) $(XLDFLAGS) $(MAINLIBS) $(NORMALMAINOBJ) $(MINIOBJS) $(COMMONOBJS) $(DMYEXT) $(LIBS) $(OUTFLAG)$@
 
+gc_test_miniruby: 
+		@-if test -f $@; then $(MV) -f $@ $@.old; $(RM) $@.old; fi
+		$(ECHO) linking $@
+		$(Q) $(PURIFY) $(CC) $(LDFLAGS) $(XLDFLAGS) $(MAINLIBS) $(NORMALMAINOBJ) $(MINIOBJS) $(COMMONOBJS) $(DMYEXT) $(LIBS) $(OUTFLAG)$@
+
+
+
 $(PROGRAM):
 		@$(RM) $@
 		$(ECHO) linking $@
@@ -383,7 +390,7 @@ TEST_INCFLAGS= -I. -I./include/ -I.ext/include/i686-linux/
 TEST_FLAGS=-pthread
 TEST_SOURCES=unittest/deque_test.c unittest/mocks.c
 gc-unittest: unittest/*.c
-	gcc $(TEST_INCFLAGS) $(TEST_FLAGS) $(CFLAGS) $(TEST_SOURCES) -o unittest.o
+	$(CC) $(TEST_INCFLAGS) $(TEST_FLAGS) $(CFLAGS) $(TEST_SOURCES) -o unittest.o
 	./unittest.o
 
 $(INSNS): $(srcdir)/insns.def vm_opts.h \
