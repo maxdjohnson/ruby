@@ -205,7 +205,7 @@ static void* mark_run_loop(void* arg) {
             break;
         }
         VALUE v = deque_pop(&deque);
-        printf("Thread %lu marking %lu\n", thread_id, v);
+        //        printf("Thread %lu marking %lu\n", thread_id, v);
         gc_do_mark(active_objspace, v);
     }
     return NULL;
@@ -227,13 +227,18 @@ void gc_mark_parallel(void* objspace) {
     pthread_attr_init(&attr);
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
 
-    for (t = 0; t < NTHREADS; t++) {
+    for (t = 1; t < NTHREADS; t++) {
         pthread_create(&threads[t], &attr, mark_run_loop, (void*)t);
         //TODO: handle error codes
     }
+    //Set master thread to doing the same work as its slaves
+    //We need the master thread to not be created with pthread_create in order to 
+    //use the stack information present in the master thread to obtain the root set
+    mark_run_loop(0);
     pthread_attr_destroy(&attr);
 
-    for (t = 0; t < NTHREADS; t++) {
+    //Wait for everyone to finish
+    for (t = 1; t < NTHREADS; t++) {
         pthread_join(threads[t], &status);
         //TODO: handle error codes
     }
