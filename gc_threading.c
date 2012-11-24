@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <pthread.h>
 
-#define NTHREADS 1
+#define NTHREADS 4
 #define GLOBAL_QUEUE_SIZE 500 /*TODO*/
 #define GLOBAL_QUEUE_SIZE_MIN (GLOBAL_QUEUE_SIZE / 4)
 #define LOCAL_QUEUE_SIZE 200 /*TODO*/
