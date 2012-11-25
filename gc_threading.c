@@ -13,7 +13,7 @@
 #define DEQUE_FULL 0
 #define DEQUE_EMPTY -1
 
-#define GC_THREADING_DEBUG 1
+/* #define GC_THREADING_DEBUG 1 */
 
 #ifdef GC_THREADING_DEBUG
 #define debug_print(...)                        \

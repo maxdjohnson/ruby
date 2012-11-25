@@ -164,10 +164,13 @@ miniruby$(EXEEXT):
 		$(ECHO) linking $@
 		$(Q) $(PURIFY) $(CC) $(LDFLAGS) $(XLDFLAGS) $(MAINLIBS) $(NORMALMAINOBJ) $(MINIOBJS) $(COMMONOBJS) $(DMYEXT) $(LIBS) $(OUTFLAG)$@
 
+#Put the gc in mark testing mode
+#This probably isn't portable away from gcc...
+TEST_PREPROC_FLAGS = -D GC_MARK_TEST
 gc_test_miniruby: 
 		@-if test -f $@; then $(MV) -f $@ $@.old; $(RM) $@.old; fi
 		$(ECHO) linking $@
-		$(Q) $(PURIFY) $(CC) $(LDFLAGS) $(XLDFLAGS) $(MAINLIBS) $(NORMALMAINOBJ) $(MINIOBJS) $(COMMONOBJS) $(DMYEXT) $(LIBS) $(OUTFLAG)$@
+		$(Q) $(PURIFY) $(CC) $(TEST_PREPROC_FLAGS) $(LDFLAGS) $(XLDFLAGS) $(MAINLIBS) $(NORMALMAINOBJ) $(MINIOBJS) $(GC_TEST_OBJS) $(DMYEXT) $(LIBS) $(OUTFLAG)$@
 
 
 

@@ -11,6 +11,7 @@
 
 **********************************************************************/
 
+#include "gc_marker.h"
 #include "ruby/ruby.h"
 #include "ruby/st.h"
 #include "ruby/re.h"
@@ -1633,7 +1634,7 @@ gc_mark(rb_objspace_t *objspace, VALUE ptr, int lev)
     if (obj->as.basic.flags & FL_RESERVED) return;  /* already marked */
     obj->as.basic.flags |= FL_RESERVED;
     objspace->heap.live_num++;
-
+    GC_TEST_LOG("Marked %lu\n", ptr);
     if (lev > GC_LEVEL_MAX || (lev == 0 && stack_check(STACKFRAME_FOR_GC_MARK))) {
 	if (!mark_stack_overflow) {
 	    if (mark_stack_ptr - mark_stack < MARK_STACK_MAX) {
@@ -2156,12 +2157,14 @@ rest_sweep(rb_objspace_t *objspace)
     }
 }
 
-extern void gc_mark_single_threaded(rb_objspace_t *objspace) {
-    
+static void gc_marks(rb_objspace_t *objspace);
 
+/* Entrance point for gc_mark_phase */
+void gc_mark_single_threaded(void *objspace) {
+    gc_marks(objspace);
 }
 
-static void gc_marks(rb_objspace_t *objspace);
+
 
 static int
 gc_lazy_sweep(rb_objspace_t *objspace)

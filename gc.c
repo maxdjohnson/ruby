@@ -1628,12 +1628,13 @@ gc_mark(rb_objspace_t *objspace, VALUE ptr, int lev)
     register RVALUE *obj;
 
     obj = RANY(ptr);
+    
     if (rb_special_const_p(ptr)) return; /* special const not marked */
     if (obj->as.basic.flags == 0) return;       /* free cell */
     if (obj->as.basic.flags & FL_MARK) return;  /* already marked */
     obj->as.basic.flags |= FL_MARK;
     objspace->heap.live_num++;
-
+    GC_TEST_LOG("Marked %lu\n", ptr);
     /* if (lev > GC_LEVEL_MAX || (lev == 0 && stack_check(STACKFRAME_FOR_GC_MARK))) { */
     /*     if (!mark_stack_overflow) { */
     /*         if (mark_stack_ptr - mark_stack < MARK_STACK_MAX) { */
