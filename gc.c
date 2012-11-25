@@ -1634,18 +1634,18 @@ gc_mark(rb_objspace_t *objspace, VALUE ptr, int lev)
     obj->as.basic.flags |= FL_MARK;
     objspace->heap.live_num++;
 
-    if (lev > GC_LEVEL_MAX || (lev == 0 && stack_check(STACKFRAME_FOR_GC_MARK))) {
-	if (!mark_stack_overflow) {
-	    if (mark_stack_ptr - mark_stack < MARK_STACK_MAX) {
-		*mark_stack_ptr = ptr;
-		mark_stack_ptr++;
-	    }
-	    else {
-		mark_stack_overflow = 1;
-	    }
-	}
-	return;
-    }
+    /* if (lev > GC_LEVEL_MAX || (lev == 0 && stack_check(STACKFRAME_FOR_GC_MARK))) { */
+    /*     if (!mark_stack_overflow) { */
+    /*         if (mark_stack_ptr - mark_stack < MARK_STACK_MAX) { */
+    /*     	*mark_stack_ptr = ptr; */
+    /*     	mark_stack_ptr++; */
+    /*         } */
+    /*         else { */
+    /*     	mark_stack_overflow = 1; */
+    /*         } */
+    /*     } */
+    /*     return; */
+    /* } */
     gc_mark_children(objspace, ptr, lev+1);
 }
 
@@ -2478,14 +2478,14 @@ gc_marks(rb_objspace_t *objspace)
     rb_gc_mark_unlinked_live_method_entries(th->vm);
 
     /* gc_mark objects whose marking are not completed*/
-    while (!MARK_STACK_EMPTY) {
-	if (mark_stack_overflow) {
-	    gc_mark_all(objspace);
-	}
-	else {
-	    gc_mark_rest(objspace);
-	}
-    }
+    /* while (!MARK_STACK_EMPTY) { */
+    /*     if (mark_stack_overflow) { */
+    /*         gc_mark_all(objspace); */
+    /*     } */
+    /*     else { */
+    /*         gc_mark_rest(objspace); */
+    /*     } */
+    /* } */
     GC_PROF_MARK_TIMER_STOP;
 }
 

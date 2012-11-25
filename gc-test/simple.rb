@@ -2,8 +2,8 @@
 
 #gc.disable
 #Shallow graph
-1000000.times do
-  Hash.new
+100000.times do
+  Object.new
 end
 # GC.enable
 # GC.start
