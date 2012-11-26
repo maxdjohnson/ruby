@@ -104,7 +104,6 @@ COMMONOBJS    = $(NORMAL_OBJS) \
 
 GC_TEST_OBJS  = $(NORMAL_OBJS) \
 		gc_test_marker.$(OBJEXT) \
-		gc_single_threaded.$(OBJEXT)
 
 EXPORTOBJS    = dln.$(OBJEXT) \
 		encoding.$(OBJEXT) \

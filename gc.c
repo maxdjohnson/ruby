@@ -1628,7 +1628,7 @@ gc_mark(rb_objspace_t *objspace, VALUE ptr, int lev)
     register RVALUE *obj;
 
     obj = RANY(ptr);
-    
+
     if (rb_special_const_p(ptr)) return; /* special const not marked */
     if (obj->as.basic.flags == 0) return;       /* free cell */
     if (obj->as.basic.flags & FL_MARK) return;  /* already marked */
@@ -2160,6 +2160,11 @@ rest_sweep(rb_objspace_t *objspace)
 extern void gc_mark_parallel(void* objspace);
 
 static void gc_marks(rb_objspace_t *objspace);
+
+/* Entrance point for gc_mark_phase */
+void gc_mark_single_threaded(void *objspace) {
+    gc_marks(objspace);
+}
 
 void gc_start_mark(void* objspace) {
     gc_marks((rb_objspace_t*) objspace);
