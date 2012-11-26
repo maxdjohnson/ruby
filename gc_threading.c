@@ -4,6 +4,12 @@
 #include <stdio.h>
 #include <pthread.h>
 
+#define MODE_SINGLE_THREAD 0
+#define MODE_MULTITHREAD 1
+#define MODE_DUAL 2
+
+static int mode = MODE_DUAL;
+
 #define NTHREADS 4
 #define GLOBAL_QUEUE_SIZE 500 /*TODO*/
 #define GLOBAL_QUEUE_SIZE_MIN (GLOBAL_QUEUE_SIZE / 4)
@@ -31,8 +37,12 @@
     ((a) < (b) ? (a) : (b))
 
 
+/** Defined in gc.c */
+extern int gc_defer_mark;
+extern void gc_mark_reset(void* objspace);
 extern void gc_do_mark(void* objspace, VALUE ptr);
 extern void gc_start_mark(void* objspace);
+
 pthread_key_t thread_id_k;
 /**
  * Deque
@@ -90,7 +100,7 @@ static VALUE deque_pop(deque_t* deque) {
   if (deque_empty_p(deque))
     return DEQUE_EMPTY;
   assert(deque->tail >= 0);
-  rtn = deque->buffer[deque->tail];  
+  rtn = deque->buffer[deque->tail];
 
   deque->tail = POS_MOD(deque->tail - 1, deque->max_length);
 
@@ -174,7 +184,7 @@ static void global_queue_pop_work(unsigned long thread_id, global_queue_t* globa
 static void global_queue_offer_work(global_queue_t* global_queue, deque_t* local_queue) {
     int i;
     int localqueuesize = local_queue->length;
-    int items_to_offer, free_slots; 
+    int items_to_offer, free_slots;
 
     if ((global_queue->waiters && localqueuesize > 2) ||
             (global_queue_count < GLOBAL_QUEUE_SIZE_MIN &&
@@ -185,18 +195,18 @@ static void global_queue_offer_work(global_queue_t* global_queue, deque_t* local
         free_slots = GLOBAL_QUEUE_SIZE - global_queue_count;
         items_to_offer = MIN(localqueuesize / 2, free_slots);
         //Offer to global
-        debug_print("Thread %lu offering %d items to global\n", 
+        debug_print("Thread %lu offering %d items to global\n",
                *((long*)pthread_getspecific(thread_id_k)),
                items_to_offer);
 
-        for (i = 0; i < items_to_offer; i++) {            
+        for (i = 0; i < items_to_offer; i++) {
             assert(deque_push(&(global_queue->deque), deque_pop_back(local_queue)));
         }
         if (global_queue->waiters) {
             pthread_cond_broadcast(&global_queue->wait_condition);
         }
         pthread_mutex_unlock(&global_queue->lock);
-        
+
     }
 }
 
@@ -238,7 +248,7 @@ static void* mark_run_loop(void* arg) {
     return NULL;
 }
 
-void gc_mark_parallel(void* objspace) {
+static void gc_mark_parallel(void* objspace) {
     global_queue_t queuedata;
     pthread_attr_t attr;
     pthread_t threads[NTHREADS];
@@ -260,7 +270,7 @@ void gc_mark_parallel(void* objspace) {
         //TODO: handle error codes
     }
     //Set master thread to doing the same work as its slaves
-    //We need the master thread to not be created with pthread_create in order to 
+    //We need the master thread to not be created with pthread_create in order to
     //use the stack information present in the master thread to obtain the root set
     mark_run_loop(0);
     pthread_attr_destroy(&attr);
@@ -281,5 +291,24 @@ void gc_mark_defer(void *objspace, VALUE ptr, int lev) {
         if (deque_push(deque, ptr) == 0) {
             gc_do_mark(objspace, ptr);
         }
+    }
+}
+
+void gc_markall(void* objspace) {
+    switch (mode) {
+        case MODE_SINGLE_THREAD:
+            gc_defer_mark = 0;
+            gc_start_mark(objspace);
+            break;
+        case MODE_MULTITHREAD:
+            gc_defer_mark = 1;
+            gc_mark_parallel(objspace);
+            break;
+        case MODE_DUAL:
+            gc_defer_mark = 1;
+            gc_mark_parallel(objspace);
+            gc_mark_reset(objspace);
+            gc_defer_mark = 0;
+            gc_start_mark(objspace);
     }
 }
